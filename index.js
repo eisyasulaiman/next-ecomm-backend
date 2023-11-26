@@ -1,40 +1,77 @@
-import express from "express"
-import prisma from "./src/utils/prisma.js"
-import { Prisma, PrismaClient } from '@prisma/client'
+import express from "express";
+import prisma from "./src/utils/prisma.js";
+import { Prisma, PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs'
 
-const app = express()
-const port = process.env.PORT || 8080
+const app = express();
+const port = process.env.PORT || 8080;
 
-app.use(express.json())
-app.get('/', async ( res) => {
-  const allUsers = await prisma.User.findMany()
-  res.json(allUsers) 
-})
+app.use(express.json());
+
+// Filtering function
+function filter(obj, ...keys) {
+  return keys.reduce((a, c) => ({ ...a, [c]: obj[c] }), {});
+}
+
+// Validation function
+function validateUser(input) {
+  const validationErrors = {};
+
+  if (!('name' in input) || input['name'].length === 0) {
+    validationErrors['name'] = 'cannot be blank';
+  }
+
+  if (!('email' in input) || input['email'].length === 0) {
+    validationErrors['email'] = 'cannot be blank';
+  } else if (!input['email'].match(/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/)) {
+    validationErrors['email'] = 'is invalid';
+  }
+
+  if (!('password' in input) || input['password'].length === 0) {
+    validationErrors['password'] = 'cannot be blank';
+  } else if (input['password'].length < 8) {
+    validationErrors['password'] = 'should be at least 8 characters';
+  }
+
+  return validationErrors;
+}
 
 app.post('/users', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    const newUser = await prisma.User.create({
-      data: { name, email, password },
-    });
-  
-    console.log(newUser);
+  const {name, email, password} = req.body;
+  const hashedPassword = bcrypt.hashSync(password, 8);  // Hash the pw using bcrypt then store the hashed pw in database
 
-    res.json(newUser);
+  // Validate input
+  const validationErrors = validateUser({ name, email, password });;
+
+  if (Object.keys(validationErrors).length !== 0) {
+    return res.status(400).json({
+      error: validationErrors
+    });
+  }
+
+  // Create user
+  try {
+    const newUser = await prisma.User.create({
+      data: {
+        name, email, password: hashedPassword 
+      },
+    });
+
+    // Filter and return user
+    const filteredUser = filter(newUser, 'id', 'name', 'email');
+    res.json(filteredUser);
   } catch (err) {
+    // Handle Prisma error
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       const formattedError = {};
       formattedError[`${err.meta.target[0]}`] = 'already taken';
-
-      return res.status(500).json({
-        error: formattedError
-      });  // friendly error handling
+      return res.status(500).json({ error: formattedError });
     }
 
-    // to log it for debugging purposes
+    // Log unknown errors
     console.error(err);
 
-    // Send a generic error response
+    // Send generic error response
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -42,4 +79,4 @@ app.post('/users', async (req, res) => {
 app.listen(port, function (err) {
   if (err) console.log(err);
   console.log(`Server listening on PORT ${port}`);
-})
+});
