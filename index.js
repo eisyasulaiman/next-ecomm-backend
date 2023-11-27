@@ -2,8 +2,11 @@ import express from "express";
 import prisma from "./src/utils/prisma.js";
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import cors from 'cors';
 
 const app = express();
+app.use(express.json()); // for parsing application/json
+
 const port = process.env.PORT || 8080;
 
 // Filtering function
@@ -34,20 +37,21 @@ function validateUser(input) {
   return validationErrors;
 }
 
+app.use(cors())
+
 app.post('/users', async (req, res) => {
   const { name, email, password } = req.body;
 
-  // Hash the password using bcrypt
-  const hashedPassword = bcrypt.hashSync(password, 8);
-
-  // Validate input
-  const validationErrors = validateUser({ name, email, password: hashedPassword });
+  // Validate input USE PW
+  const validationErrors = validateUser({ name, email, password });
 
   if (Object.keys(validationErrors).length !== 0) {
     return res.status(400).json({
       error: validationErrors
     });
   }
+
+  const hashedPassword = bcrypt.hashSync(password, 8);
 
   // Create user
   try {
@@ -62,7 +66,7 @@ app.post('/users', async (req, res) => {
     console.log(newUser);
     
     // Filter and return user
-    const filteredUser = filter(newUser, 'id', 'name', 'email');
+    const filteredUser = filter(newUser, 'id', 'name', 'email', 'password');
     res.json(filteredUser);
   } catch (err) {
     // Handle Prisma error
