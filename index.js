@@ -1,11 +1,16 @@
 import express from "express";
 import prisma from "./src/utils/prisma.js";
+import {signAccessToken} from "./src/utils/jwt.js";
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import bodyParser from 'body-parser';
 import cors from 'cors';
+// import {filter } from "./src/utils/jwt.js";
 
 const app = express();
-app.use(express.json()); // for parsing application/json
+app.use(express.json());
+app.use(bodyParser.json()) 
+app.use(cors())// for parsing application/json
 
 const port = process.env.PORT || 8080;
 
@@ -14,35 +19,62 @@ function filter(obj, ...keys) {
   return keys.reduce((a, c) => ({ ...a, [c]: obj[c] }), {});
 }
 
-// Validation function
-function validateUser(input) {
-  const validationErrors = {};
+// Validation function for sign up
+export function validateUser(input) {
+  const validationErrors = {}
 
-  if (!('name' in input) || input['name'].length === 0) {
-    validationErrors['name'] = 'cannot be blank';
+  if (!input || !('name' in input) || !input['name'] || input['name'].length == 0) {
+    validationErrors['name'] = 'cannot be blank'
   }
 
-  if (!('email' in input) || input['email'].length === 0) {
+  if (!input?.email || input.email.length === 0) {
+    validationErrors.email = 'cannot be blank';
+  }
+  
+  if (!input?.password || input.password.length === 0) {
+    validationErrors.password = 'cannot be blank';
+  }
+  
+  if (input?.password && input.password.length < 8) {
+    validationErrors.password = 'should be at least 8 characters';
+  }
+  
+  const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+  if (input?.email && !emailRegex.test(input.email)) {
+    validationErrors.email = 'is invalid';
+  }
+
+  return validationErrors
+}
+// for login auth
+export function validateLogin(input) {
+  const validationErrors = {}
+
+  const email = input ? input['email'] : null;
+  const password = input ? input['password'] : null;
+
+  if (!email || email.length == 0) {
     validationErrors['email'] = 'cannot be blank';
-  } else if (!input['email'].match(/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/)) {
+  }
+
+  if (!password || password.length == 0) {
+    validationErrors['password'] = 'cannot be blank';
+  }
+  
+  if (email && !email.match(/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/)) {
     validationErrors['email'] = 'is invalid';
   }
 
-  if (!('password' in input) || input['password'].length === 0) {
-    validationErrors['password'] = 'cannot be blank';
-  } else if (input['password'].length < 8) {
-    validationErrors['password'] = 'should be at least 8 characters';
-  }
-
-  return validationErrors;
+  return validationErrors
 }
 
-app.use(cors())
 
+
+// for sign up
 app.post('/users', async (req, res) => {
   const { name, email, password } = req.body;
 
-  // Validate input USE PW
+  // Validate input
   const validationErrors = validateUser({ name, email, password });
 
   if (Object.keys(validationErrors).length !== 0) {
@@ -67,6 +99,7 @@ app.post('/users', async (req, res) => {
     
     // Filter and return user
     const filteredUser = filter(newUser, 'id', 'name', 'email', 'password');
+   
     res.json(filteredUser);
   } catch (err) {
     // Handle Prisma error
@@ -76,7 +109,7 @@ app.post('/users', async (req, res) => {
       return res.status(500).json({ error: formattedError });
     }
 
-    // Log unknown errors
+    // Log unknown errors 
     console.error(err);
 
     // Send generic error response
@@ -84,6 +117,52 @@ app.post('/users', async (req, res) => {
   }
 });
 
+// for login
+app.post('/sign-in', async (req, res) => {
+  const { email, password } = req.body;
+
+  // Validate input USE PW
+  const validationErrors = validateLogin({ email, password });
+
+  if (Object.keys(validationErrors).length !== 0) {
+    return res.status(400).json({
+      error: validationErrors
+    });
+  }
+
+  //searches the database for a user based on the email
+  const user = await prisma.user.findUnique({
+    where: {
+      email: email
+    }
+  })
+
+  //if the user is not found, return an error
+  if (!user) {
+    return res.status(401).json({
+      error: {
+        email: ' Email address or password not valid'
+      }
+    });
+  }
+
+  //to check if password is correct
+  const checkPassword = bcrypt.compareSync(password, user.password);
+  if (!checkPassword) {
+    return res.status(401).send({
+      error: {
+        email: ' Email address or password not valid'
+      }
+    });
+  }
+
+  const filteredUser = filter(user, 'id', 'name', 'email');
+  const accesstoken = await signAccessToken(filteredUser);
+  return res.json({ accesstoken });
+ });
+
+
+// for getting all users
 app.listen(port, function (err) {
   if (err) console.log(err);
   console.log(`Server listening on PORT ${port}`);
