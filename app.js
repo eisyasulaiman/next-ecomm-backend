@@ -9,10 +9,11 @@ import cors from 'cors';
 
 const app = express();
 app.use(express.json());
+
 app.use(bodyParser.json()) 
 app.use(cors())// for parsing application/json
 
-const port = process.env.PORT || 8080;
+// const port = process.env.PORT || 8080; not used for test
 
 // Filtering function
 function filter(obj, ...keys) {
@@ -68,8 +69,6 @@ export function validateLogin(input) {
   return validationErrors
 }
 
-
-
 // for sign up
 app.post('/users', async (req, res) => {
   const { name, email, password } = req.body;
@@ -98,9 +97,10 @@ app.post('/users', async (req, res) => {
     console.log(newUser);
     
     // Filter and return user
-    const filteredUser = filter(newUser, 'id', 'name', 'email', 'password');
+    const filteredUser = filter(newUser, 'id', 'name', 'email');
    
     res.json(filteredUser);
+    
   } catch (err) {
     // Handle Prisma error
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -137,6 +137,8 @@ app.post('/sign-in', async (req, res) => {
     }
   })
 
+  console.log(user)
+
   //if the user is not found, return an error
   if (!user) {
     return res.status(401).json({
@@ -162,8 +164,10 @@ app.post('/sign-in', async (req, res) => {
  });
 
 
-// for getting all users
-app.listen(port, function (err) {
-  if (err) console.log(err);
-  console.log(`Server listening on PORT ${port}`);
-});
+// // for getting all users
+// app.listen(port, function (err) {
+//   if (err) console.log(err);
+//   console.log(`Server listening on PORT ${port}`);
+// });
+
+export default app
