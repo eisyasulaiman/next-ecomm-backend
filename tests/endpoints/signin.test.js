@@ -33,9 +33,11 @@ describe("POST /sign-in", () => {
     })
 
     it("with valid data should return 200 and access token", async () => {
+        const validData = { email: user.email, password: user.password };
+
         const response = await request(app)
             .post("/sign-in")
-            .send({ email: user.email, password: user.password })
+            .send(validData)
             .set('Accept', 'application/json')
 
         expect(response.statusCode).toBe(200);
@@ -43,9 +45,11 @@ describe("POST /sign-in", () => {
     });
 
     it("with wrong email should return 401 and not return access token", async () => {
+        const wrongEmailData = { email: 'wrong' + user.email, password: user.password };
+
         const response = await request(app)
             .post("/sign-in")
-            .send({ email: 'wrong' + user.email, password: user.password })
+            .send(wrongEmailData)
             .set('Accept', 'application/json')
 
         expect(response.statusCode).toBe(401);
@@ -53,12 +57,14 @@ describe("POST /sign-in", () => {
     });
 
     it("with wrong password should return 401 and not return access token", async () => {
+        const wrongPasswordData = { email: user.email, password: 'wrong' + user.password };
+
         const response = await request(app)
             .post("/sign-in")
-            .send({ email: user.email, password: 'wrong' + user.password })
+            .send(wrongPasswordData)
             .set('Accept', 'application/json')
 
         expect(response.statusCode).toBe(401);
         expect(response.body.accessToken).toBeFalsy();
     });
- });
+});

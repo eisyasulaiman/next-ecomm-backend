@@ -15,4 +15,15 @@ model User {
   name     String?
   email    String  @unique
   password String
+  images   Image[]
+}
+
+model Image {
+  id          Int     @id @default(autoincrement())
+  url         String
+  price       Int
+  title       String
+  description String
+  userId      Int     // Foreign key
+  user        User    @relation(fields: [userId], references: [id]) // Relation scalar field
 }
